@@ -2,7 +2,6 @@ from collections import Counter
 
 from advent_utils import read_input
 
-
 InputData = list[tuple[int, int]]
 
 
