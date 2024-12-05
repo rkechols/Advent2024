@@ -2,7 +2,7 @@ import functools
 from collections import defaultdict
 from typing import Literal, cast
 
-from advent_utils import read_input
+from advent_utils import read_input, timer
 
 Rule = tuple[str, str]
 Seq = list[str]
@@ -73,4 +73,5 @@ def main(input_parsed: InputData):
 
 
 if __name__ == "__main__":
-    main(get_parsed_input())
+    with timer():
+        main(get_parsed_input())

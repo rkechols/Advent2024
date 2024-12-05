@@ -1,6 +1,6 @@
 from collections import Counter
 
-from advent_utils import read_input
+from advent_utils import read_input, timer
 
 InputData = list[tuple[int, int]]
 
@@ -29,4 +29,5 @@ def main(input_parsed: InputData):
 
 
 if __name__ == "__main__":
-    main(get_parsed_input())
+    with timer():
+        main(get_parsed_input())

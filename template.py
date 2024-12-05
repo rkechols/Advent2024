@@ -1,5 +1,4 @@
-from advent_utils import read_input
-
+from advent_utils import read_input, timer
 
 InputData = str
 
@@ -14,4 +13,5 @@ def main(input_parsed: InputData):
 
 
 if __name__ == "__main__":
-    main(get_parsed_input())
+    with timer():
+        main(get_parsed_input())

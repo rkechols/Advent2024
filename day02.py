@@ -1,6 +1,6 @@
 import itertools
 
-from advent_utils import read_input
+from advent_utils import read_input, timer
 
 SAFE_DIFFS_UP = {1, 2, 3}
 SAFE_DIFFS_DOWN = {-1, -2, -3}
@@ -47,4 +47,5 @@ def main(input_parsed: InputData):
 
 
 if __name__ == "__main__":
-    main(get_parsed_input())
+    with timer():
+        main(get_parsed_input())
