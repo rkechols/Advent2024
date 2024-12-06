@@ -1,3 +1,6 @@
+from concurrent.futures import as_completed as futures_as_completed
+from concurrent.futures.thread import ThreadPoolExecutor
+
 import numpy as np
 
 from advent_utils import read_input, timer
@@ -96,26 +99,49 @@ class GuardSim:
             history.add(new_history_entry)
 
 
-def main(input_parsed: InputData):
+def is_infinite_loop(grid: np.ndarray, start_loc: Loc, *, loc_modification: Loc) -> bool:
+    grid_modified = grid.copy()
+    grid_modified[loc_modification] = False  # place an obstacle
+    modified_guard_sim = GuardSim(grid_modified, start_loc)
+    try:
+        modified_guard_sim.walk()
+    except InfiniteLoop:
+        return True
+    else:
+        return False
+
+
+def main(input_parsed: InputData, *, use_threads: bool = True):
     grid, start_loc = input_parsed
     # part 1
     initial_guard_sim = GuardSim(grid, start_loc)
     locs_visited = initial_guard_sim.walk()
     print(f"{len(locs_visited) = }")
     # part 2
+    print(f"{use_threads = }")
     locs_to_modify = locs_visited - {start_loc}
-    infinite_loops_count = 0
-    for loc_modification in locs_to_modify:  # could run these in parallel if we have appropriate hardware
-        grid_modified = grid.copy()
-        grid_modified[loc_modification] = False  # place an obstacle
-        modified_guard_sim = GuardSim(grid_modified, start_loc)
-        try:
-            modified_guard_sim.walk()
-        except InfiniteLoop:
-            infinite_loops_count += 1
+    if use_threads:
+        with ThreadPoolExecutor() as executor:
+            futures = [
+                executor.submit(is_infinite_loop, grid, start_loc, loc_modification=loc_modification)
+                for loc_modification in locs_to_modify
+            ]
+            infinite_loops_count = sum(
+                future.result()
+                for future in futures_as_completed(futures)
+            )
+    else:
+        infinite_loops_count = sum(
+            is_infinite_loop(grid, start_loc, loc_modification=loc_modification)
+            for loc_modification in locs_to_modify
+        )
     print(f"{infinite_loops_count = }")
 
 
 if __name__ == "__main__":
+    from argparse import ArgumentParser
+    arg_parser = ArgumentParser()
+    arg_parser.add_argument("--no-threads", action="store_true")
+    args = arg_parser.parse_args()
     with timer():
-        main(get_parsed_input())
+        main(get_parsed_input(), use_threads=(not args.no_threads))
