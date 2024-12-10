@@ -1,5 +1,3 @@
-from functools import cache
-
 import numpy as np
 
 from advent_utils import read_input, timer
@@ -46,7 +44,6 @@ class Solver:
     def is_loc_in_bounds(self, loc: Loc) -> bool:
         return 0 <= loc[0] < self.n_rows and 0 <= loc[1] < self.n_cols
 
-    @cache
     def _find_trails_recursive(self, loc: Loc) -> tuple[set[Loc], int]:
         current_elevation = self.grid[loc]
         if current_elevation == END_ELEVATION:
