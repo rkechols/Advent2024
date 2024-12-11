@@ -1,4 +1,4 @@
-from tqdm import tqdm
+from collections import Counter, defaultdict
 
 from advent_utils import read_input, timer
 
@@ -10,34 +10,31 @@ def get_parsed_input() -> InputData:
     return list(map(int, input_raw.strip().split()))
 
 
-def do_blinks(number: int, *, n_blinks: int) -> int:
+def do_blinks(stone_counts: dict[int, int], *, n_blinks: int) -> int:
     if n_blinks < 0:
         raise ValueError("n_blinks must be >= 0")
-    if n_blinks == 0:
-        return 1
-    blinks_remaining = n_blinks - 1
-    if number == 0:
-        return do_blinks(1, n_blinks=blinks_remaining)
-    number_str = str(number)
-    if (n_digits := len(number_str)) % 2 == 0:
-        n_digits_each = n_digits // 2
-        left = do_blinks(int(number_str[:n_digits_each]), n_blinks=blinks_remaining)
-        right = do_blinks(int(number_str[n_digits_each:]), n_blinks=blinks_remaining)
-        return left + right
-    # else
-    return do_blinks(number * 2024, n_blinks=blinks_remaining)
+    for _ in range(n_blinks):
+        new_stone_counts: dict[int, int] = defaultdict(int)
+        for number, count in stone_counts.items():
+            if number == 0:
+                new_stone_counts[1] += count
+            elif (n_digits := len(number_str := str(number))) % 2 == 0:
+                n_digits_each = n_digits // 2
+                left = int(number_str[:n_digits_each])
+                right = int(number_str[n_digits_each:])
+                new_stone_counts[left] += count
+                new_stone_counts[right] += count
+            else:
+                new_stone_counts[number * 2024] += count
+        stone_counts = new_stone_counts
+    return sum(stone_counts.values())
 
 
 def main(input_parsed: InputData):
-    n_stones_total1 = sum(
-        do_blinks(number, n_blinks=25)
-        for number in input_parsed
-    )
+    stone_counts = Counter(input_parsed)
+    n_stones_total1 = do_blinks(stone_counts, n_blinks=25)
     print(f"{n_stones_total1 = }")
-    n_stones_total2 = sum(
-        do_blinks(number, n_blinks=75)
-        for number in tqdm(input_parsed)
-    )
+    n_stones_total2 = do_blinks(stone_counts, n_blinks=75)
     print(f"{n_stones_total2 = }")
 
 
