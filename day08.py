@@ -3,9 +3,8 @@ from collections import defaultdict
 
 import numpy as np
 
-from advent_utils import read_input, timer
+from advent_utils import Loc, read_input, timer
 
-Loc = tuple[int, int]
 InputData = tuple[dict[str, set[Loc]], tuple[int, int]]
 
 EMTPY = "."
@@ -20,7 +19,7 @@ def get_parsed_input() -> InputData:
     input_parsed = defaultdict(set)
     for i in range(grid.shape[0]):
         for j in range(grid.shape[1]):
-            loc = (i, j)
+            loc = Loc(i, j)
             symbol = grid[loc]
             if symbol != EMTPY:
                 input_parsed[symbol].add(loc)
@@ -45,18 +44,18 @@ class Solver:
             to_return = {antenna_1, antenna_2}
             antinode = a2 + vec
             while self.in_bounds(antinode):
-                to_return.add(tuple(antinode))
+                to_return.add(Loc(*antinode))
                 antinode += vec
             antinode = a1 - vec
             while self.in_bounds(antinode):
-                to_return.add(tuple(antinode))
+                to_return.add(Loc(*antinode))
                 antinode -= vec
             return to_return
         else:  # part 1
             to_return = set()
             for antinode in [a2 + vec, a1 - vec]:
                 if self.in_bounds(antinode):
-                    to_return.add(tuple(antinode))
+                    to_return.add(Loc(*antinode))
             return to_return
 
     def solve(self, all_antenna_locs: dict[str, set[Loc]]) -> dict[Loc, set[str]]:

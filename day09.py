@@ -114,7 +114,6 @@ def main(input_parsed: InputData):
     compact_disk2(disk2, highest_file_id=(len(input_parsed) // 2))  # in-place
     checksum2 = get_checksum(disk2)
     print(f"{checksum2 = }")
-    # too big: 19931653800089
 
 
 if __name__ == "__main__":

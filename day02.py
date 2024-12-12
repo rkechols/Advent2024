@@ -13,7 +13,7 @@ def get_parsed_input() -> InputData:
     input_raw = read_input(2)
     data = [
         list(map(int, line.strip().split()))
-        for line in input_raw.strip().split("\n")
+        for line in input_raw.strip().splitlines()
     ]
     return data
 

@@ -3,23 +3,13 @@ from concurrent.futures.thread import ThreadPoolExecutor
 
 import numpy as np
 
-from advent_utils import read_input, timer
-
-Loc = tuple[int, int]
-Direction = tuple[int, int]
+from advent_utils import Direction, GridCardinalDirection, GridSolver, Loc, read_input, timer
 
 InputData = tuple[np.ndarray, Loc]
 
 START_MARKER = "^"
 WALL = "#"
 OPEN = "."
-
-DIRECTIONS = [  # order matters
-    (-1, 0),  # up
-    (0, 1),  # right
-    (1, 0),  # down
-    (0, -1),  # left
-]
 
 
 def get_parsed_input() -> InputData:
@@ -32,7 +22,7 @@ def get_parsed_input() -> InputData:
     for i, line in enumerate(input_lines):
         for j, char in enumerate(line):
             if char == START_MARKER:
-                start_loc = (i, j)
+                start_loc = Loc(i, j)
                 return grid, start_loc
     else:
         raise ValueError(f"start marker {START_MARKER!r} not found")
@@ -46,36 +36,21 @@ class InfiniteLoop(Exception):
     """raised when the guard stays on the grid infinitely"""
 
 
-class GuardSim:
+class GuardSim(GridSolver):
     def __init__(self, grid: np.ndarray, start_loc: Loc):
-        super().__init__()
-        if len(grid.shape) != 2:
-            raise ValueError("grid must be 2-dimensional")
         if grid.dtype != np.bool:
             raise TypeError("grid must contain booleans")
-        self.grid = grid
+        super().__init__(grid)
         self.start_loc = start_loc
         self.current_loc = self.start_loc
-        self._direction_index = 0  # up
-
-    @property
-    def n_rows(self) -> int:
-        return self.grid.shape[0]
-
-    @property
-    def n_cols(self) -> int:
-        return self.grid.shape[1]
-
-    def direction(self) -> Direction:
-        return DIRECTIONS[self._direction_index]
+        self.current_direction: Direction = GridCardinalDirection.UP.value
 
     def turn_right(self):
-        self._direction_index = (self._direction_index + 1) % len(DIRECTIONS)
+        self.current_direction = self.current_direction.rot_clockwise()
 
     def step_forward(self) -> bool:
-        direction = self.direction()
-        next_loc = self.current_loc[0] + direction[0], self.current_loc[1] + direction[1]
-        if not (0 <= next_loc[0] < self.n_rows and 0 <= next_loc[1] < self.n_cols):  # out of bounds
+        next_loc = self.current_loc.shift(self.current_direction)
+        if not self.is_loc_in_bounds(next_loc):
             raise OffGrid
         if self.grid[next_loc]:  # can step forward
             self.current_loc = next_loc
@@ -85,7 +60,7 @@ class GuardSim:
 
     def walk(self) -> set[Loc]:
         history: set[tuple[Loc, Direction]] = set()
-        history.add((self.current_loc, self.direction()))
+        history.add((self.current_loc, self.current_direction))
         while True:
             try:
                 could_step = self.step_forward()
@@ -93,7 +68,7 @@ class GuardSim:
                 return {loc for loc, _ in history}
             if not could_step:  # hit a wall
                 self.turn_right()
-            new_history_entry = (self.current_loc, self.direction())
+            new_history_entry = (self.current_loc, self.current_direction)
             if new_history_entry in history:  # doomed to repeat itself, as they say
                 raise InfiniteLoop
             history.add(new_history_entry)

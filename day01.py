@@ -1,4 +1,5 @@
 from collections import Counter
+from typing import cast
 
 from advent_utils import read_input, timer
 
@@ -8,8 +9,8 @@ InputData = list[tuple[int, int]]
 def get_parsed_input() -> InputData:
     input_raw = read_input(1)
     data = [
-        tuple(map(int, line.split()))
-        for line in input_raw.strip().split("\n")
+        cast(tuple[int, int], tuple(map(int, line.split())))
+        for line in input_raw.strip().splitlines()
     ]
     return data
 

@@ -3,7 +3,7 @@ from typing import NamedTuple
 
 import numpy as np
 
-from advent_utils import Direction, Loc, read_input, timer
+from advent_utils import Direction, GridCardinalDirection, GridSolver, Loc, read_input, timer
 
 InputData = np.ndarray
 
@@ -52,24 +52,7 @@ class Region:
         return len(self.area) * n_sides
 
 
-class RegionFinder:
-    def __init__(self, grid: np.ndarray):
-        super().__init__()
-        if len(grid.shape) != 2:
-            raise ValueError("grid must be 2-dimensional")
-        self.grid = grid
-
-    @property
-    def n_rows(self) -> int:
-        return self.grid.shape[0]
-
-    @property
-    def n_cols(self) -> int:
-        return self.grid.shape[1]
-
-    def is_loc_in_bounds(self, loc: Loc) -> bool:
-        return 0 <= loc.row < self.n_rows and 0 <= loc.col < self.n_cols
-
+class RegionFinder(GridSolver):
     def find_regions(self) -> list[Region]:
         to_return = []
         all_searched_locs = set()
@@ -88,7 +71,7 @@ class RegionFinder:
                         if loc in area:  # already analyzed this one
                             continue
                         area.add(loc)
-                        for direction in Direction:
+                        for direction in GridCardinalDirection.values():
                             adjacent_loc = loc.shift(direction)
                             if self.is_loc_in_bounds(adjacent_loc):
                                 if self.grid[adjacent_loc] == this_symbol:

@@ -3,7 +3,9 @@ import time
 from contextlib import contextmanager
 from enum import Enum
 from pathlib import Path
-from typing import NamedTuple, Self
+from typing import NamedTuple, Self, TypeVar
+
+import numpy as np
 
 DATA_DIR = Path(__file__).parent / "data"
 
@@ -23,15 +25,36 @@ def timer():
         print(f"[{duration:.3f} seconds]", file=sys.stderr)
 
 
-class Direction(Enum):
-    UP = (-1, 0)
-    RIGHT = (0, 1)
-    DOWN = (1, 0)
-    LEFT = (0, -1)
+_Tup = TypeVar("_Tup", bound=tuple)
 
-    def perpendiculars(self) -> tuple[Self, Self]:
-        a, b = self.value
-        return Direction((b, a)), Direction((-b, -a))
+
+def scale_tuple(tup: _Tup, scale: int) -> _Tup:
+    return tup.__class__(x * scale for x in tup)
+
+
+class Direction(NamedTuple):
+    row_shift: int
+    col_shift: int
+
+    def __mul__(self, scale: int) -> Self:
+        return Direction(self.row_shift * scale, self.col_shift * scale)
+
+    def rot_clockwise(self) -> Self:
+        return Direction(self.col_shift, -self.row_shift)
+
+    def perpendiculars(self) -> Self:
+        return Direction(self.col_shift, self.row_shift), Direction(-self.col_shift, -self.row_shift)
+
+
+class GridCardinalDirection(Enum):
+    UP = Direction(-1, 0)
+    RIGHT = Direction(0, 1)
+    DOWN = Direction(1, 0)
+    LEFT = Direction(0, -1)
+
+    @classmethod
+    def values(cls) -> list[Direction]:
+        return [e.value for e in cls]
 
 
 class Loc(NamedTuple):
@@ -39,4 +62,23 @@ class Loc(NamedTuple):
     col: int
 
     def shift(self, direction: Direction) -> Self:
-        return Loc(self.row + direction.value[0], self.col + direction.value[1])
+        return Loc(self.row + direction.row_shift, self.col + direction.col_shift)
+
+
+class GridSolver:
+    def __init__(self, grid: np.ndarray):
+        super().__init__()
+        if len(grid.shape) != 2:
+            raise ValueError("grid must be 2-dimensional")
+        self.grid = grid
+
+    @property
+    def n_rows(self) -> int:
+        return self.grid.shape[0]
+
+    @property
+    def n_cols(self) -> int:
+        return self.grid.shape[1]
+
+    def is_loc_in_bounds(self, loc: Loc) -> bool:
+        return 0 <= loc.row < self.n_rows and 0 <= loc.col < self.n_cols
