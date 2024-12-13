@@ -47,16 +47,20 @@ def mat_solve_ints(mat: np.ndarray) -> tuple[int, int]:
     lcm2 = math.lcm(right_upper, right_lower)
     mat[0, :] *= (lcm2 // right_upper)
     mat[0, :] -= (mat[1, :] * (lcm2 // right_lower))
+    # double check eliminations
     if mat[1, 0] != 0 or mat[0, 1] != 0:
         raise RuntimeError("we goofed")
+    # do division on the top row, if stuff is properly divisible
     left_upper, _, vec_upper = mat[0, :]
     a_count, mod = divmod(vec_upper, left_upper)
     if mod != 0:
         raise NotIntegerSolvable
+    # do division on the bottom row, if stuff is properly divisible
     _, right_lower, vec_lower = mat[1, :]
     b_count, mod = divmod(vec_lower, right_lower)
     if mod != 0:
         raise NotIntegerSolvable
+    # answer is indeed integers
     return a_count, b_count
 
 
