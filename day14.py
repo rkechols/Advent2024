@@ -9,7 +9,7 @@ from PIL import Image
 
 from advent_utils import Direction, Loc, read_input, timer
 
-BotsState = dict[Loc, list[Direction]]
+BotsState = dict[Loc, set[Direction]]
 
 RENDERINGS_DIR = Path("data/day14-renderings")
 shutil.rmtree(RENDERINGS_DIR, ignore_errors=True)
@@ -22,9 +22,9 @@ def get_parsed_input() -> BotsState:
     for line in input_raw.strip().splitlines():
         px, py, vx, vy = map(int, re.fullmatch(r"p=(-?\d+),(-?\d+) v=(-?\d+),(-?\d+)", line).groups())
         input_parsed.append((Loc(px, py), Direction(vx, vy)))
-    input_structured: BotsState = defaultdict(list)
+    input_structured: BotsState = defaultdict(set)
     for loc, direction in input_parsed:
-        input_structured[loc].append(direction)
+        input_structured[loc].add(direction)
     return input_structured
 
 
@@ -74,12 +74,12 @@ class Solver:
                 raise ValueError("simulation has already run past that point; use a new Solver instance")
         while n_seconds_stop is None or self.seconds_elapsed < n_seconds_stop:
             # progress forward 1 second
-            all_bots_new: BotsState = defaultdict(list)
+            all_bots_new: BotsState = defaultdict(set)
             for loc, bots in self.all_bots.items():
                 for bot_direction in bots:
                     bot_new_loc = loc.shift(bot_direction)
                     bot_new_loc = Loc(bot_new_loc.row % self.n_rows, bot_new_loc.col % self.n_cols)
-                    all_bots_new[bot_new_loc].append(bot_direction)
+                    all_bots_new[bot_new_loc].add(bot_direction)
             self.all_bots = all_bots_new
             self.seconds_elapsed += 1
             # check if we're in a loop
