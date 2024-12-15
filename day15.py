@@ -3,7 +3,7 @@ from typing import Any
 
 import numpy as np
 
-from advent_utils import read_input, timer, GridCardinalDirection, GridSolver, Loc, Direction
+from advent_utils import Direction, GridCardinalDirection, GridSolver, Loc, read_input, timer
 
 InputData = tuple[np.ndarray, list[GridCardinalDirection]]
 
@@ -32,9 +32,11 @@ def get_parsed_input() -> InputData:
     return grid, directions
 
 
-class Solver1(GridSolver):
+class _Solver(GridSolver):
     def __init__(self, grid: np.ndarray):
-        super().__init__(grid.copy())
+        if {*grid[0, :], *grid[-1, :], *grid[:, 0], *grid[:, -1]} != {WALL}:
+            raise ValueError("grid border must be completely walls!")
+        super().__init__(grid)
         self.bot_loc = self._find_bot()
 
     def _find_bot(self) -> Loc:
@@ -43,6 +45,11 @@ class Solver1(GridSolver):
                 if self.grid[i, j] == BOT:
                     return Loc(i, j)
         raise ValueError("bot not found!")
+
+
+class Solver1(_Solver):
+    def __init__(self, grid: np.ndarray):
+        super().__init__(grid.copy())  # since we modify in-place
 
     def move_bot(self, directions: list[GridCardinalDirection]):
         for direction_ in directions:
@@ -90,6 +97,7 @@ class CannotMove(Exception):
 
 
 def update_special(to_update: dict[Any, Any], new_values: dict[Any, Any]):
+    # TODO: get around this weirdness by doing BFS with sets, not DFS
     for k, v in new_values.items():
         if v == EMPTY:
             to_update.setdefault(k, v)
@@ -97,21 +105,12 @@ def update_special(to_update: dict[Any, Any], new_values: dict[Any, Any]):
             to_update[k] = v
 
 
-class Solver2(GridSolver):
-    def __init__(self, grid_original: np.ndarray):
-        grid = np.array([
+class Solver2(_Solver):
+    def __init__(self, grid: np.ndarray):
+        super().__init__(np.array([
             list(itertools.chain(*(EXPANSIONS[sym] for sym in row)))
-            for row in grid_original
-        ])
-        super().__init__(grid)
-        self.bot_loc = self._find_bot()
-
-    def _find_bot(self) -> Loc:
-        for i in range(1, self.n_rows - 1):
-            for j in range(2, self.n_cols - 2):
-                if self.grid[i, j] == BOT:
-                    return Loc(i, j)
-        raise ValueError("bot not found!")
+            for row in grid
+        ]))
 
     def _move_helper(self, loc_target: Loc, direction: Direction) -> dict[Loc, str]:
         this_symbol = self.grid[loc_target]
@@ -169,7 +168,7 @@ class Solver2(GridSolver):
     def get_gps_sum(self) -> int:
         total = 0
         for i in range(1, self.n_rows - 1):
-            for j in range(1, self.n_cols - 1):
+            for j in range(2, self.n_cols - 2):
                 if self.grid[i, j] == BOX_LEFT:
                     total += (100 * i) + j
         return total
