@@ -1,3 +1,4 @@
+import collections
 import copy
 import heapq
 import itertools
@@ -56,20 +57,37 @@ class Solver(GridSolver):
         if any(itertools.chain(grid[0, :], grid[-1, :], grid[:, 0], grid[:, -1])):
             raise ValueError("all grid edges should be walls")
         super().__init__(grid)
+        if start_loc == end_loc:
+            raise ValueError("`start_loc` and `end_loc` should not be equal")
         self.start_state = ReindeerState(start_loc, GridCardinalDirection.RIGHT.value)
         self.end_loc = end_loc
 
     def find_best_paths(self) -> tuple[int, set[Loc]]:
-        best_scores: dict[ReindeerState, tuple[int, set[Loc]]] = {self.start_state: (0, {self.start_state.loc})}
-        search_priority_queue = [(0, self.start_state, {self.start_state.loc})]
+        best_score: int | None = None
+        locs_on_any_best_path = set()
+
+        cache: dict[ReindeerState, tuple[int, set[Loc]]] = {self.start_state: (0, {self.start_state.loc})}
+        search_priority_queue = collections.deque([(0, self.start_state, {self.start_state.loc})])
         while len(search_priority_queue) > 0:
-            cost, state, locs_visited = heapq.heappop(search_priority_queue)
+            cost, state, locs_visited = search_priority_queue.popleft()
+            if best_score is not None and cost > best_score:
+                continue
             if state.loc == self.end_loc:  # don't keep searching after arriving at the end
                 continue
             for cost_new, state_new in get_move_options(cost, state):
                 if not self.grid[state_new.loc]:  # wall
                     continue
-                cost_old, locs_visited_old = best_scores.get(state_new, (None, set()))
+                if best_score is not None and cost_new > best_score:
+                    continue
+                locs_visited_new = locs_visited | {state_new.loc}
+                if state_new.loc == self.end_loc:
+                    if best_score is None or cost_new < best_score:
+                        best_score = cost_new
+                        locs_on_any_best_path = locs_visited_new
+                    elif cost_new == best_score:
+                        locs_on_any_best_path |= locs_visited_new
+                    continue
+                cost_old, locs_visited_old = cache.get(state_new, (None, set()))
                 if cost_old is None or cost_new < cost_old:  # never been here before, or this new way is strictly better
                     all_locs_on_path = copy.copy(locs_visited)
                 elif cost_new == cost_old:  # tied
@@ -78,21 +96,10 @@ class Solver(GridSolver):
                     continue
                 all_locs_on_path.add(state_new.loc)
                 # either this is our first time getting to this state, or the path getting here was cheaper than anything previous
-                best_scores[state_new] = (cost_new, all_locs_on_path)
-                heapq.heappush(search_priority_queue, (cost_new, state_new, all_locs_on_path))  # put it in the queue to be further searched
-        best_score: int | None = None
-        locs_on_any_best_path = set()
-        for direction in GridCardinalDirection.values():
-            this_score, this_locs = best_scores.get(ReindeerState(self.end_loc, direction), (None, set()))
-            if this_score is None:
-                continue
-            if best_score is None or this_score < best_score:
-                best_score = this_score
-                locs_on_any_best_path = this_locs
-            elif this_score == best_score:
-                locs_on_any_best_path |= this_locs
+                cache[state_new] = (cost_new, all_locs_on_path)
+                search_priority_queue.append((cost_new, state_new, all_locs_on_path))  # put it in the queue to be further searched
         if best_score is None:
-            raise ValueError("goofed")
+            raise ValueError("never found path to end loc")
         return best_score, locs_on_any_best_path
 
 
