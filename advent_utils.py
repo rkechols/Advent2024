@@ -42,6 +42,9 @@ class Direction(NamedTuple):
     def rot_clockwise(self) -> Self:
         return Direction(self.col_shift, -self.row_shift)
 
+    def rot_counter_clockwise(self) -> Self:
+        return Direction(-self.col_shift, self.row_shift)
+
     def perpendiculars(self) -> Self:
         return Direction(self.col_shift, self.row_shift), Direction(-self.col_shift, -self.row_shift)
 
