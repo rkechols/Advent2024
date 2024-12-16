@@ -1,6 +1,5 @@
 import collections
 import copy
-import heapq
 import itertools
 from typing import NamedTuple
 
@@ -63,44 +62,48 @@ class Solver(GridSolver):
         self.end_loc = end_loc
 
     def find_best_paths(self) -> tuple[int, set[Loc]]:
-        best_score: int | None = None
+        lowest_cost: int | None = None
         locs_on_any_best_path = set()
 
-        cache: dict[ReindeerState, tuple[int, set[Loc]]] = {self.start_state: (0, {self.start_state.loc})}
-        search_priority_queue = collections.deque([(0, self.start_state, {self.start_state.loc})])
-        while len(search_priority_queue) > 0:
-            cost, state, locs_visited = search_priority_queue.popleft()
-            if best_score is not None and cost > best_score:
+        cache: dict[ReindeerState, tuple[int, set[Loc]]] = {}
+        search_queue = collections.deque([(0, self.start_state, {self.start_state.loc})])
+        while len(search_queue) > 0:
+            cost, state, locs_visited = search_queue.popleft()
+
+            # if the current cost is higher than our best full solution so far, following this path further is pointless
+            if lowest_cost is not None and cost > lowest_cost:
                 continue
-            if state.loc == self.end_loc:  # don't keep searching after arriving at the end
+
+            if state.loc == self.end_loc:  # found a way to the end!
+                if lowest_cost is None or cost < lowest_cost:  # strictly better than anything we had before; forget previous stuff
+                    lowest_cost = cost
+                    locs_on_any_best_path = copy.copy(locs_visited)
+                elif cost == lowest_cost:  # tied with before; merge data
+                    locs_on_any_best_path |= locs_visited
+                # else: this is no improvement; just keep our previous solution
+                continue  # no need to keep searching past the end
+
+            if not self.grid[state.loc]:  # wall
                 continue
+
+            # is this the cheapest way to get to this state? (that we've seen so far)
+            cost_old, locs_visited_old = cache.get(state, (None, set()))
+            if cost_old is None or cost < cost_old:  # strictly better than anything we had before; forget previous stuff
+                pass
+            elif cost == cost_old:  # tied with before; merge data
+                locs_visited.update(locs_visited_old)
+            else:  # this new way is worse than what we've seen before
+                continue
+            cache[state] = (cost, locs_visited)
+
+            # add adjacent states to the queue to be processed
             for cost_new, state_new in get_move_options(cost, state):
-                if not self.grid[state_new.loc]:  # wall
-                    continue
-                if best_score is not None and cost_new > best_score:
-                    continue
                 locs_visited_new = locs_visited | {state_new.loc}
-                if state_new.loc == self.end_loc:
-                    if best_score is None or cost_new < best_score:
-                        best_score = cost_new
-                        locs_on_any_best_path = locs_visited_new
-                    elif cost_new == best_score:
-                        locs_on_any_best_path |= locs_visited_new
-                    continue
-                cost_old, locs_visited_old = cache.get(state_new, (None, set()))
-                if cost_old is None or cost_new < cost_old:  # never been here before, or this new way is strictly better
-                    all_locs_on_path = copy.copy(locs_visited)
-                elif cost_new == cost_old:  # tied
-                    all_locs_on_path = locs_visited | locs_visited_old  # combine all paths to this score
-                else:  # this new way is worse
-                    continue
-                all_locs_on_path.add(state_new.loc)
-                # either this is our first time getting to this state, or the path getting here was cheaper than anything previous
-                cache[state_new] = (cost_new, all_locs_on_path)
-                search_priority_queue.append((cost_new, state_new, all_locs_on_path))  # put it in the queue to be further searched
-        if best_score is None:
+                search_queue.append((cost_new, state_new, locs_visited_new))
+
+        if lowest_cost is None:
             raise ValueError("never found path to end loc")
-        return best_score, locs_on_any_best_path
+        return lowest_cost, locs_on_any_best_path
 
 
 def main(input_parsed: InputData):
