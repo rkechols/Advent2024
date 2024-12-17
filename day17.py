@@ -42,7 +42,8 @@ class Registers:
 # part 1
 
 
-def run(registers: Registers, program: list[int]) -> list[int]:
+def run(registers_tup: tuple[int, int, int], program: list[int]) -> list[int]:
+    registers = Registers.from_tuple(registers_tup)
     ptr = 0
     output = []
     while True:
@@ -123,7 +124,7 @@ PROGRAM = [2, 4, 1, 7, 7, 5, 1, 7, 4, 6, 0, 3, 5, 5, 3, 0]
 # 4. if `a` has any nonzero bits remaining, repeat; otherwise stop
 
 
-def part2() -> int:
+def part2(check: bool = True) -> int:
     # work backwards from final `a` value, which is 0
     a_options = {0}
     for b_printed in reversed(PROGRAM):
@@ -143,7 +144,14 @@ def part2() -> int:
         if len(a_options_new) == 0:
             raise ValueError("failed to find path")
         a_options = a_options_new
-        print(f"{a_options = }")
+
+    if check:
+        for modified_a in sorted(a_options):
+            output = run((modified_a, 0, 0), PROGRAM)
+            if output != PROGRAM:
+                print(f"ERROR: mistaken answer found: {modified_a = }")
+                a_options.discard(modified_a)
+
     return min(a_options)
 
 
@@ -153,7 +161,7 @@ def part2() -> int:
 def main(input_parsed: InputData):
     registers_tup, program = input_parsed
     # part 1
-    output = run(Registers.from_tuple(registers_tup), program)
+    output = run(registers_tup, program)
     print("output:", ",".join(str(o) for o in output))
     # part 2
     modified_a = part2()
