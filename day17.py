@@ -1,7 +1,4 @@
-import concurrent.futures as futures
 import dataclasses
-import math
-import os
 import re
 from typing import Self
 
@@ -12,10 +9,10 @@ InputData = tuple[tuple[int, int, int], list[int]]
 
 def get_parsed_input() -> InputData:
     input_raw = read_input(17)
-    registers_str, instructions_str = input_raw.strip().split("\n\n")
+    registers_str, program_str = input_raw.strip().split("\n\n")
     a, b, c = map(int, re.findall(r"Register [ABC]: (\d+)", registers_str))
-    instructions = list(map(int, instructions_str.removeprefix("Program: ").split(",")))
-    return (a, b, c), instructions
+    program = list(map(int, program_str.removeprefix("Program: ").split(",")))
+    return (a, b, c), program
 
 
 @dataclasses.dataclass
@@ -41,135 +38,125 @@ class Registers:
         else:
             raise ValueError(f"invalid operand: {operand}")
 
-    def __str__(self) -> str:
-        return f"({self.a},{self.b},{self.c})"
+
+# part 1
 
 
-class HaltProgram(StopIteration):
-    """raised when the program should stop"""
-
-
-class InfiniteLoopError(Exception):
-    """raised when we hit an infinite loop"""
-
-
-class Runner:
-    __slots__ = ["registers", "instructions", "ptr", "output", "states_seen"]
-
-    def __init__(self, input_parsed: InputData):
-        super().__init__()
-        registers_tup, instructions = input_parsed
-        self.registers = Registers.from_tuple(registers_tup)
-        self.instructions = instructions
-        self.ptr = 0
-        self.output = []
-        self.states_seen = set()
-
-    def _run_one_step(self):
+def run(registers: Registers, program: list[int]) -> list[int]:
+    ptr = 0
+    output = []
+    while True:
         # check halting status / get next input
         try:
-            opcode = self.instructions[self.ptr]
-            operand = self.instructions[self.ptr + 1]
+            opcode = program[ptr]
+            operand = program[ptr + 1]
         except IndexError:
-            raise HaltProgram
-        # check for infinite loop
-        state_str = f"{self.registers}:{self.ptr}"
-        if state_str in self.states_seen:
-            raise InfiniteLoopError
-        self.states_seen.add(state_str)
+            break
         # do the thing
-        ptr_next = self.ptr + 2
+        ptr_next = ptr + 2
         if opcode == 0:  # adv
-            self.registers.a = int(self.registers.a / (2 ** self.registers.get_combo_operand(operand)))
+            registers.a = int(registers.a / (2 ** registers.get_combo_operand(operand)))
         elif opcode == 1:  # bxl
-            self.registers.b = self.registers.b ^ operand
+            registers.b = registers.b ^ operand
         elif opcode == 2:  # bst
-            self.registers.b = self.registers.get_combo_operand(operand) % 8
+            registers.b = registers.get_combo_operand(operand) % 8
         elif opcode == 3:  # jnz
-            if self.registers.a != 0:
+            if registers.a != 0:
                 ptr_next = operand
         elif opcode == 4:  # bxc
-            self.registers.b = self.registers.b ^ self.registers.c
+            registers.b = registers.b ^ registers.c
         elif opcode == 5:  # out
-            self.output.append(self.registers.get_combo_operand(operand) % 8)
+            output.append(registers.get_combo_operand(operand) % 8)
         elif opcode == 6:  # bdv
-            self.registers.b = int(self.registers.a / (2 ** self.registers.get_combo_operand(operand)))
+            registers.b = int(registers.a / (2 ** registers.get_combo_operand(operand)))
         elif opcode == 7:  # cdv
-            self.registers.c = int(self.registers.a / (2 ** self.registers.get_combo_operand(operand)))
+            registers.c = int(registers.a / (2 ** registers.get_combo_operand(operand)))
         else:
             raise ValueError(f"invalid opcode: {opcode}")
         # advance to next instruction
-        self.ptr = ptr_next
-
-    def run(self) -> list[int]:
-        # just execute the program
-        try:
-            while True:
-                self._run_one_step()
-        except HaltProgram:
-            return self.output
-
-    def run_returns_instructions(self) -> bool:
-        n_expected = len(self.instructions)
-        try:
-            while True:
-                self._run_one_step()
-                n_out = len(self.output)
-                if n_out > n_expected:
-                    return False  # our output has grown too long
-                if n_out > 0 and self.output[-1] != self.instructions[n_out - 1]:
-                    return False  # our most recent output doesn't match the corresponding expected value
-        except HaltProgram:
-            return self.output == self.instructions
+        ptr = ptr_next
+    return output
 
 
-def try_range(input_parsed: InputData, a_start: int, a_end: int) -> int | None:
-    for a in range(a_start, a_end):
-        runner = Runner(input_parsed)
-        runner.registers.a = a
-        try:
-            if runner.run_returns_instructions():
-                return a
-        except InfiniteLoopError:
-            continue
-    return None
+# part 2 (NOTE: part 2 code is specifically written for my input)
 
 
-def try_range_threads(input_parsed: InputData, a_start: int, a_end: int) -> int | None:
-    print(f"try_range_threads({a_start=}, {a_end=})")
-    with futures.ThreadPoolExecutor() as thread_executor:
-        thread_chunk_size = math.ceil((a_end - a_start) / thread_executor._max_workers)
-        futures_ = [
-            thread_executor.submit(try_range, input_parsed, a_start_inner, min(a_end, a_start_inner + thread_chunk_size))
-            for a_start_inner in range(a_start, a_end, thread_chunk_size)
-        ]
-        for future in futures.as_completed(futures_):
-            answer = future.result()
-            if answer is not None:
-                return answer
-    return None
+PROGRAM = [2, 4, 1, 7, 7, 5, 1, 7, 4, 6, 0, 3, 5, 5, 3, 0]
+
+# import itertools
+# for i, (a, b) in enumerate(itertools.pairwise(PROGRAM)):
+#     print(f"{i:>02}: {a, b}")
+
+# instructions read from all cursor positions:
+#   00: (2, 4) -> b = a % 8 (take last 3 bits)
+#   01: (4, 1) -> b = b ^ c (where bits don't match)
+#   02: (1, 7) -> b = b ^ 7 (invert last 3 bits)
+#   03: (7, 7) -> INVALID
+#   04: (7, 5) -> c = a << b (trim 'b' bits from 'a'; save as 'c')
+#   05: (5, 1) -> print(1)
+#   06: (1, 7) -> b = b ^ 7 (invert last 3 bits)
+#   07: (7, 4) -> c = a << a (trim 'a' bits from 'a')
+#   08: (4, 6) -> b = b ^ c (where bits don't match)
+#   09: (6, 0) -> b = a (trim no bits; just copy)
+#   10: (0, 3) -> a = a << 3 (trim 3 bits from a)
+#   11: (3, 5) -> if a: goto 5
+#   12: (5, 5) -> print(b % 8)
+#   13: (5, 3) -> print(3)
+#   14: (3, 0) -> if a: goto 0
+#   else: TERMINATE
+
+# instructions we can actually get to:
+#   00: (2, 4) -> b = a % 8 (take last 3 bits)
+#   02: (1, 7) -> b = b ^ 7 (invert 'b')
+#   04: (7, 5) -> c = a << b (trim 'b' bits from 'a'; save as 'c')
+#   06: (1, 7) -> b = b ^ 7 (invert 'b')
+#   08: (4, 6) -> b = b ^ c (where bits don't match)
+#   10: (0, 3) -> a = a << 3 (trim 3 bits from a)
+#   12: (5, 5) -> print(b % 8)
+#   14: (3, 0) -> if a: goto 0
+#   else: TERMINATE
+
+# semantically:
+# 1. look at the last few bits of `a` (up to 10, depending on the last 3 bits)
+# 2. calculate a number in range [0, 7] to be printed
+# 3. drop the last 3 bits of `a`
+# 4. if `a` has any nonzero bits remaining, repeat; otherwise stop
 
 
-def part_2(input_parsed: InputData, process_chunk_size: int = 3_000_000) -> int:
-    with futures.ProcessPoolExecutor() as process_executor:
-        a_start = 1
-        while True:
-            pending_futures = []
-            for _ in range(os.cpu_count() - 2):
-                pending_futures.append(process_executor.submit(try_range_threads, input_parsed, a_start, a_start + process_chunk_size))
-                a_start += process_chunk_size
-            for future_ in pending_futures:
-                answer = future_.result()
-                if answer is not None:
-                    return answer
-                pending_futures.append(process_executor.submit(try_range_threads, input_parsed, a_start, a_start + process_chunk_size))
-                a_start += process_chunk_size
+def part2() -> int:
+    # work backwards from final `a` value, which is 0
+    a_options = {0}
+    for b_printed in reversed(PROGRAM):
+        a_options_new = set()
+        for a_so_far in a_options:
+            for a_tail in range(8):  # try all the options for the last 3 bits
+                # what does it look like with these last 3 bits stuck back on the end?
+                a_hypothetical = (a_so_far * 8) + a_tail
+                if a_hypothetical == 0:  # `a` can never be 0 except at program termination
+                    continue
+                # calculate the number that goes to output
+                b = a_hypothetical % 8
+                c = a_hypothetical // (2 ** (b ^ 7))
+                b = (b ^ c) % 8
+                if b == b_printed:  # it matches the output we need
+                    a_options_new.add(a_hypothetical)
+        if len(a_options_new) == 0:
+            raise ValueError("failed to find path")
+        a_options = a_options_new
+        print(f"{a_options = }")
+    return min(a_options)
+
+
+# run both parts together
 
 
 def main(input_parsed: InputData):
-    output = Runner(input_parsed).run()
+    registers_tup, program = input_parsed
+    # part 1
+    output = run(Registers.from_tuple(registers_tup), program)
     print("output:", ",".join(str(o) for o in output))
-    modified_a = part_2(input_parsed)
+    # part 2
+    modified_a = part2()
     print(f"{modified_a = }")
 
 
