@@ -1,4 +1,5 @@
 import dataclasses
+import itertools
 import re
 from typing import Self
 
@@ -79,41 +80,18 @@ def run(registers_tup: tuple[int, int, int], program: list[int]) -> list[int]:
     return output
 
 
-# part 2 (NOTE: part 2 code is specifically written for my input)
+# part 2
 
-
-PROGRAM = [2, 4, 1, 7, 7, 5, 1, 7, 4, 6, 0, 3, 5, 5, 3, 0]
-
-# import itertools
-# for i, (a, b) in enumerate(itertools.pairwise(PROGRAM)):
-#     print(f"{i:>02}: {a, b}")
-
-# instructions read from all cursor positions:
+# generalized:
 #   00: (2, 4) -> b = a % 8 (take last 3 bits)
-#   01: (4, 1) -> b = b ^ c (where bits don't match)
-#   02: (1, 7) -> b = b ^ 7 (invert last 3 bits)
-#   03: (7, 7) -> INVALID
+#   02: (1, x) -> b = b ^ x (modify 'b')
 #   04: (7, 5) -> c = a << b (trim 'b' bits from 'a'; save as 'c')
-#   05: (5, 1) -> print(1)
-#   06: (1, 7) -> b = b ^ 7 (invert last 3 bits)
-#   07: (7, 4) -> c = a << a (trim 'a' bits from 'a')
-#   08: (4, 6) -> b = b ^ c (where bits don't match)
-#   09: (6, 0) -> b = a (trim no bits; just copy)
-#   10: (0, 3) -> a = a << 3 (trim 3 bits from a)
-#   11: (3, 5) -> if a: goto 5
-#   12: (5, 5) -> print(b % 8)
-#   13: (5, 3) -> print(3)
-#   14: (3, 0) -> if a: goto 0
-#   else: TERMINATE
-
-# instructions we can actually get to:
-#   00: (2, 4) -> b = a % 8 (take last 3 bits)
-#   02: (1, 7) -> b = b ^ 7 (invert 'b')
-#   04: (7, 5) -> c = a << b (trim 'b' bits from 'a'; save as 'c')
-#   06: (1, 7) -> b = b ^ 7 (invert 'b')
-#   08: (4, 6) -> b = b ^ c (where bits don't match)
-#   10: (0, 3) -> a = a << 3 (trim 3 bits from a)
-#   12: (5, 5) -> print(b % 8)
+#   { -- order here is flexible; we just need both (1, y) and (4, _) before (5, 5)
+#     06: (1, y) -> b = b ^ y (modify 'b')
+#     08: (4, _) -> b = b ^ c (where bits don't match)
+#     10: (5, 5) -> print(b % 8)
+#     12: (0, 3) -> a = a << 3 (trim 3 bits from a)
+#   }
 #   14: (3, 0) -> if a: goto 0
 #   else: TERMINATE
 
@@ -124,10 +102,22 @@ PROGRAM = [2, 4, 1, 7, 7, 5, 1, 7, 4, 6, 0, 3, 5, 5, 3, 0]
 # 4. if `a` has any nonzero bits remaining, repeat; otherwise stop
 
 
-def part2(check: bool = True) -> int:
+def part2(program: list[int], check: bool = True) -> int:
+    program_pairs = list(itertools.batched(program, 2, strict=True))
+    assert len(program_pairs) == 8
+    assert program_pairs[0] == (2, 4)
+    assert program_pairs[1][0] == 1
+    x = program_pairs[1][1]
+    assert program_pairs[2] == (7, 5)
+    assert program_pairs[7] == (3, 0)
+    flexible_section = program_pairs[3:7]
+    flexible_section.remove((0, 3))  # ValueError if not found
+    assert flexible_section.pop(2) == (5, 5)
+    assert (flexible_section[0][0], flexible_section[1][0]) in [(1, 4), (4, 1)]
+
     # work backwards from final `a` value, which is 0
     a_options = {0}
-    for b_printed in reversed(PROGRAM):
+    for b_printed in reversed(program):
         a_options_new = set()
         for a_so_far in a_options:
             for a_tail in range(8):  # try all the options for the last 3 bits
@@ -137,8 +127,16 @@ def part2(check: bool = True) -> int:
                     continue
                 # calculate the number that goes to output
                 b = a_hypothetical % 8
-                c = a_hypothetical // (2 ** (b ^ 7))
-                b = (b ^ c) % 8
+                b = b ^ x
+                c = a_hypothetical // (2 ** b)
+                for opcode, operand in flexible_section:
+                    if opcode == 1:
+                        b = b ^ operand
+                    elif opcode == 4:
+                        b = b ^ c
+                    else:
+                        raise ValueError(f"unexpected {opcode = } in flexible section")
+                b = b % 8
                 if b == b_printed:  # it matches the output we need
                     a_options_new.add(a_hypothetical)
         if len(a_options_new) == 0:
@@ -147,8 +145,8 @@ def part2(check: bool = True) -> int:
 
     if check:
         for modified_a in sorted(a_options):
-            output = run((modified_a, 0, 0), PROGRAM)
-            if output != PROGRAM:
+            output = run((modified_a, 0, 0), program)
+            if output != program:
                 print(f"ERROR: mistaken answer found: {modified_a = }")
                 a_options.discard(modified_a)
 
@@ -164,7 +162,7 @@ def main(input_parsed: InputData):
     output = run(registers_tup, program)
     print("output:", ",".join(str(o) for o in output))
     # part 2
-    modified_a = part2()
+    modified_a = part2(program)
     print(f"{modified_a = }")
 
 
