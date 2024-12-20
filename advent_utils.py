@@ -67,6 +67,9 @@ class Loc(NamedTuple):
     def shift(self, direction: Direction) -> Self:
         return Loc(self.row + direction.row_shift, self.col + direction.col_shift)
 
+    def manhattan_distance(self, other: "Loc") -> int:
+        return sum(abs(a - b) for a, b in zip(self, other))
+
 
 class GridSolver:
     def __init__(self, grid: np.ndarray):
