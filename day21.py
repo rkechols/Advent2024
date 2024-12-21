@@ -1,13 +1,14 @@
 import itertools
 import re
 from functools import cache
-from typing import Iterable, cast
+from typing import Literal, cast
 
 import numpy as np
 
 from advent_utils import GridCardinalDirection, Loc, read_input, timer
 
 InputData = list[str]
+ACCEPT: Literal["A"] = "A"
 KeypadSymbol = str | GridCardinalDirection
 
 
@@ -26,23 +27,29 @@ def _create_keypad_lookup(keypad: np.ndarray) -> dict[KeypadSymbol, Loc]:
     }
 
 
-NUMERIC_KEYPAD = np.array([
-    ["7", "8", "9"],
-    ["4", "5", "6"],
-    ["1", "2", "3"],
-    [None, "0", "A"],
-])
+NUMERIC_KEYPAD = np.array(
+    [
+        ["7", "8", "9"],
+        ["4", "5", "6"],
+        ["1", "2", "3"],
+        [None, "0", ACCEPT],
+    ]
+)
 NUMERIC_KEYPAD_START = Loc(3, 2)
 
-DIRECTIONAL_KEYPAD = np.array([
-    [None, GridCardinalDirection.UP, "A"],
-    [GridCardinalDirection.LEFT, GridCardinalDirection.DOWN, GridCardinalDirection.RIGHT],
-])
+DIRECTIONAL_KEYPAD = np.array(
+    [
+        [None, GridCardinalDirection.UP, ACCEPT],
+        [GridCardinalDirection.LEFT, GridCardinalDirection.DOWN, GridCardinalDirection.RIGHT],
+    ]
+)
 DIRECTIONAL_KEYPAD_START = Loc(0, 2)
 
 
 class Pathfinder:
-    # this class is stateless so we can take full advantage of caching on `shortest_paths`
+    # could add `@functools.cache` to many of these methods, but it
+    # doesn't actually help we also have `RobotSystem._min_steps_recursive` cached
+
     def __init__(self, keypad: np.ndarray, start_loc: Loc):
         super().__init__()
         if len(keypad.shape) != 2:
@@ -61,7 +68,6 @@ class Pathfinder:
         except KeyError:
             raise RuntimeError(f"Symbol {sym} not found on this keypad: {self.keypad}")
 
-    @cache
     def path_stays_in_bounds(self, start_loc: Loc, path: tuple[GridCardinalDirection, ...]) -> bool:
         if not self.is_loc_in_bounds(start_loc):
             return False
@@ -72,7 +78,6 @@ class Pathfinder:
                 return False
         return True
 
-    @cache
     def shortest_paths(self, loc_start: Loc, loc_end: Loc) -> set[tuple[GridCardinalDirection, ...]]:
         if not self.is_loc_in_bounds(loc_start) or not self.is_loc_in_bounds(loc_end):
             raise ValueError("loc_start and loc_end must both be in-bounds")
@@ -111,22 +116,21 @@ class Pathfinder:
         }
         return reasonable_paths
 
+    def expand_segment(self, segment: tuple[KeypadSymbol, ...]) -> list[set[tuple[KeypadSymbol, ...]]]:
+        if segment.count(ACCEPT) != 1 or segment[-1] != ACCEPT:
+            raise ValueError("Segment should have exactly 1 'A', at the end")
+        sequence_locs = [self.start_loc] + [self.loc_of_symbol(sym) for sym in segment]
+        return [
+            set(
+                cast(tuple[KeypadSymbol, ...], path + (ACCEPT,))
+                for path in self.shortest_paths(loc_a, loc_b)
+            )
+            for loc_a, loc_b in itertools.pairwise(sequence_locs)
+        ]
+
 
 PATHFINDER_NUMERIC = Pathfinder(NUMERIC_KEYPAD, NUMERIC_KEYPAD_START)
 PATHFINDER_DIRECTIONAL = Pathfinder(DIRECTIONAL_KEYPAD, DIRECTIONAL_KEYPAD_START)
-
-
-def all_possible_sequences(sequence_of_segment_options: list[set[tuple[KeypadSymbol, ...]]]) -> Iterable[tuple[KeypadSymbol, ...]]:
-    n_segments = len(sequence_of_segment_options)
-    if n_segments == 0:
-        return
-    if n_segments == 1:
-        yield from sequence_of_segment_options[0]
-        return
-    these_options, *remaining_segments_options = sequence_of_segment_options
-    for segment in these_options:
-        for sequence_remainder_option in all_possible_sequences(remaining_segments_options):
-            yield segment + sequence_remainder_option
 
 
 class RobotSystem:
@@ -135,38 +139,32 @@ class RobotSystem:
         if n_robots < 1:
             raise ValueError("n_robots must be >= 1")
         self.pathfinders = [PATHFINDER_NUMERIC] + ([PATHFINDER_DIRECTIONAL] * (n_robots - 1))
+        self.n_layers = len(self.pathfinders)
 
-    def min_presses_for_code(self, code: tuple[str]) -> int:
-        best_sequences: set[tuple[KeypadSymbol, ...]] = {code}
-        for pathfinder in self.pathfinders:
-            best_sequences_new = set()
-            best_length: int | None = None
-            for sequence in best_sequences:
-                sequence_locs = [pathfinder.start_loc] + [pathfinder.loc_of_symbol(sym) for sym in sequence]
-                sequence_of_segment_options = [
-                    {
-                        cast(tuple[GridCardinalDirection, ...], path + ("A",))
-                        for path in pathfinder.shortest_paths(loc_a, loc_b)
-                    }
-                    for loc_a, loc_b in itertools.pairwise(sequence_locs)
-                ]
-                for sequence_option in all_possible_sequences(sequence_of_segment_options):
-                    new_length = len(sequence_option)
-                    if best_length is None or new_length < best_length:
-                        best_length = new_length
-                        best_sequences_new = {sequence_option}
-                    elif new_length == best_length:
-                        best_sequences_new.add(sequence_option)
-                    # else: too long; ignore it
-            best_sequences = best_sequences_new
-        return min(len(s) for s in best_sequences)
+    @cache
+    def _min_steps_recursive(self, layer: int, segment: tuple[KeypadSymbol, ...]) -> int:
+        if layer == self.n_layers:
+            return len(segment)
+        pathfinder = self.pathfinders[layer]
+        segment_expansion_options_seq: list[set[tuple[KeypadSymbol, ...]]] = pathfinder.expand_segment(segment)
+        n_min_sum = 0
+        for segment_expansion_options in segment_expansion_options_seq:
+            n_min_this_segment = min(
+                self._min_steps_recursive(layer + 1, segment_expansion_option)
+                for segment_expansion_option in segment_expansion_options
+            )
+            n_min_sum += n_min_this_segment
+        return n_min_sum
+
+    def min_steps_to_enter_code(self, code: tuple[str]) -> int:
+        return self._min_steps_recursive(0, code)
 
 
 def solve(codes: InputData, *, n_robots: int) -> int:
     total = 0
-    robots = RobotSystem(n_robots=n_robots)  # TODO: should this be initialized inside the loop?
+    robots = RobotSystem(n_robots=n_robots)
     for code in codes:
-        min_presses = robots.min_presses_for_code(tuple(code))
+        min_presses = robots.min_steps_to_enter_code(tuple(code))
         code_num = int(re.match(r"\d+", code).group())
         total += min_presses * code_num
     return total
