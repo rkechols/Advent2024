@@ -37,18 +37,19 @@ def main(input_parsed: InputData):
     )
     print(f"{n_with_t = }")
     # part 2
-    while len(components) > 1:
-        components_new = set()
-        for component in components:
-            first, *others = component
-            for neighbor in graph[first]:
-                if all(neighbor in graph[other] for other in others):
-                    components_new.add(tuple(sorted(component + (neighbor,))))
-                    break
-        components = components_new
-    if len(components) != 1:
-        raise RuntimeError("Oops! There must've been a tie?")
-    biggest_component = next(iter(components))
+    biggest_component = set(next(iter(components)))
+    for component_ in components:
+        component = set(component_)
+        if component.issubset(biggest_component):
+            continue
+        elem1 = next(iter(component))
+        for neighbor in graph[elem1]:
+            if neighbor in component:
+                continue
+            if component.issubset(graph[neighbor]):
+                component.add(neighbor)
+        if len(component) > len(biggest_component):
+            biggest_component = component
     password = ",".join(sorted(biggest_component))
     print(f"{password = }")
 
