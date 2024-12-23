@@ -37,11 +37,11 @@ def main(input_parsed: InputData):
     )
     print(f"{n_with_t = }")
     # part 2
-    biggest_component = set(next(iter(components)))
+    biggest_component = set()
     for component_ in components:
-        component = set(component_)
-        if component.issubset(biggest_component):
+        if any(c in biggest_component for c in component_):
             continue
+        component = set(component_)
         elem1 = next(iter(component))
         for neighbor in graph[elem1]:
             if neighbor in component:
